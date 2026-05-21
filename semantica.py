@@ -6,7 +6,7 @@ from globalTypes import *
 programa  = ''
 posicion  = 0
 progLong  = 0
-hayError  = False
+error  = False
 
 
 def globales(prog, pos, long):
@@ -15,34 +15,34 @@ def globales(prog, pos, long):
     posicion = pos
     progLong = long
 
-_scopeStack = []
-_allScopes  = []
-_location   = 0    # contador de posiciones de memoria
+scopeStack = []
+allScopes  = []
+location   = 0    # contador de posiciones de memoria
 
 
-def _enterScope():
-    _scopeStack.append({})
+def enterScope():
+    scopeStack.append({})
 
 
-def _exitScope(name='', save=True):
+def exitScope(name='', save=True):
 # cierra el scope actual
-    if _scopeStack:
-        scope = _scopeStack.pop()
+    if scopeStack:
+        scope = scopeStack.pop()
         if save:
-            _allScopes.append((name, scope))
+            allScopes.append((name, scope))
 
 
-def _currentScope():
-    return _scopeStack[-1] if _scopeStack else {}
+def currentScope():
+    return scopeStack[-1] if scopeStack else {}
 
 
-def _insertSymbol(name, kind, expType, isArray, arraySize, params, lineno,
+def insertSymbol(name, kind, expType, isArray, arraySize, params, lineno,
                   silent=False):
-    global _location, hayError
-    scope = _currentScope()
+    global location, error
+    scope = currentScope()
     if name in scope:
         if not silent:
-            _semanticError(lineno, name,
+            semanticError(lineno, name,
                            f"'{name}' ya fue declarado en este alcance")
         return False
     scope[name] = {
@@ -51,29 +51,29 @@ def _insertSymbol(name, kind, expType, isArray, arraySize, params, lineno,
         'isArray'  : isArray,
         'arraySize': arraySize,
         'params'   : params,
-        'loc'      : _location,
+        'loc'      : location,
         'lines'    : [lineno],
     }
-    _location += 1
+    location += 1
     return True
 
 
-def _addLineRef(name, lineno):
-    for scope in reversed(_scopeStack):
+def addLineRef(name, lineno):
+    for scope in reversed(scopeStack):
         if name in scope:
             scope[name]['lines'].append(lineno)
             return
 
 
-def _lookupSymbol(name):
-    for scope in reversed(_scopeStack):
+def lookupSymbol(name):
+    for scope in reversed(scopeStack):
         if name in scope:
             return scope[name]
     return None
 
 
-def _printAllScopes():
-    for (scopeName, scope) in _allScopes:
+def printAllScopes():
+    for (scopeName, scope) in allScopes:
         title = f"Tabla de símbolos {scopeName}" if scopeName else "Tabla de símbolos global"
         print()
         print(title)
@@ -90,9 +90,9 @@ def _printAllScopes():
             print(f"{name:<20} {typeName:<10} {info['kind']:<8} {arrStr:<10}"
                   f" {info['loc']:>4}  {lines}")
 
-def _semanticError(lineno, tokenName, message):
-    global hayError
-    hayError = True
+def semanticError(lineno, tokenName, message):
+    global error
+    error = True
 
     lines    = programa.split('\n')
     lineText = lines[lineno - 1] if 0 < lineno <= len(lines) else ''
@@ -101,16 +101,16 @@ def _semanticError(lineno, tokenName, message):
     col = max(col, 0)
     arrow = ' ' * col + '^'
 
-    print(f"\nLínea {lineno}: Error semántico – {message}")
+    print(f"\nLínea {lineno}: Error semántico ; {message}")
     print(f"  {lineText}")
     print(f"  {arrow}")
 
-_currentFun     = None   # nombre de la función actual (para imprimir scope)
-_currentFunType = None   # tipo de retorno de la función actual
+currentFun     = None   # nombre de la función actual 
+currentFunType = None   # tipo de retorno de la función actual
 
 
-def _traverseSymbols(t):
-    global _currentFun, _currentFunType
+def traverseSymbols(t):
+    global currentFun, currentFunType
 
     if t is None:
         return
@@ -118,15 +118,15 @@ def _traverseSymbols(t):
     if t.nodekind == NodeKind.DeclK and t.decl == DeclKind.VarK:
         expType = ExpType.Integer if t.typeSpec == TokenType.INT else ExpType.Void
         if expType == ExpType.Void:
-            _semanticError(t.lineno, t.name,
+            semanticError(t.lineno, t.name,
                            f"variable '{t.name}' no puede ser de tipo void")
         else:
-            _insertSymbol(t.name, 'var', expType,
+            insertSymbol(t.name, 'var', expType,
                           t.isArray, t.arraySize if t.isArray else 0,
                           None, t.lineno)
         for i in range(MAXCHILDREN):
-            _traverseSymbols(t.child[i])
-        _traverseSymbols(t.sibling)
+            traverseSymbols(t.child[i])
+        traverseSymbols(t.sibling)
         return
 
     if t.nodekind == NodeKind.DeclK and t.decl == DeclKind.FunK:
@@ -139,89 +139,88 @@ def _traverseSymbols(t):
             paramList.append({'name': p.name, 'type': pType, 'isArray': p.isArray})
             p = p.sibling
         # Insertar la función en el scope actual (padre)
-        _insertSymbol(t.name, 'fun', retType, False, 0, paramList, t.lineno)
+        insertSymbol(t.name, 'fun', retType, False, 0, paramList, t.lineno)
         # Guardar contexto
-        prevFun     = _currentFun
-        prevFunType = _currentFunType
-        _currentFun     = t.name
-        _currentFunType = retType
+        prevFun     = currentFun
+        prevFunType = currentFunType
+        currentFun     = t.name
+        currentFunType = retType
         # Abrir scope 
-        _enterScope()
+        enterScope()
         p = t.child[0]
         while p is not None:
             pType = ExpType.Integer if p.typeSpec == TokenType.INT else ExpType.Void
             if not (pType == ExpType.Void and p.name is None):
-                _insertSymbol(p.name, 'param', pType, p.isArray, 0, None, p.lineno)
+                insertSymbol(p.name, 'param', pType, p.isArray, 0, None, p.lineno)
             p = p.sibling
-        _traverseBodyOnly(t.child[1])
-        _exitScope(t.name)
-        _currentFun     = prevFun
-        _currentFunType = prevFunType
-        _traverseSymbols(t.sibling)
+        traverseBodyOnly(t.child[1])
+        exitScope(t.name)
+        currentFun     = prevFun
+        currentFunType = prevFunType
+        traverseSymbols(t.sibling)
         return
 
     if t.nodekind == NodeKind.ExpK and t.exp in (ExpKind.IdK, ExpKind.AssignK):
-        sym = _lookupSymbol(t.name)
+        sym = lookupSymbol(t.name)
         if sym is None:
-            _semanticError(t.lineno, t.name,
+            semanticError(t.lineno, t.name,
                            f"identificador '{t.name}' no declarado")
         else:
-            _addLineRef(t.name, t.lineno)
+            addLineRef(t.name, t.lineno)
 
     elif t.nodekind == NodeKind.ExpK and t.exp == ExpKind.CallK:
-        sym = _lookupSymbol(t.name)
+        sym = lookupSymbol(t.name)
         if sym is None:
-            _semanticError(t.lineno, t.name,
+            semanticError(t.lineno, t.name,
                            f"función '{t.name}' no declarada")
         else:
-            _addLineRef(t.name, t.lineno)
+            addLineRef(t.name, t.lineno)
 
     elif t.nodekind == NodeKind.StmtK and t.stmt == StmtKind.CompoundK:
-        _enterScope()
+        enterScope()
         for i in range(MAXCHILDREN):
-            _traverseSymbols(t.child[i])
-        _exitScope(save=False)
-        _traverseSymbols(t.sibling)
+            traverseSymbols(t.child[i])
+        exitScope(save=False)
+        traverseSymbols(t.sibling)
         return
 
     for i in range(MAXCHILDREN):
-        _traverseSymbols(t.child[i])
-    _traverseSymbols(t.sibling)
+        traverseSymbols(t.child[i])
+    traverseSymbols(t.sibling)
 
 
-def _traverseBodyOnly(t):
+def traverseBodyOnly(t):
     if t is None:
         return
     if t.nodekind == NodeKind.StmtK and t.stmt == StmtKind.CompoundK:
         # NO abrimos scope; ya fue abierto por la función
         for i in range(MAXCHILDREN):
-            _traverseSymbols(t.child[i])
+            traverseSymbols(t.child[i])
         # NO cerramos scope aquí (lo cerrará la función)
-        _traverseSymbols(t.sibling)
+        traverseSymbols(t.sibling)
         return
-    _traverseSymbols(t)
+    traverseSymbols(t)
 
 def tabla(tree, imprime=True):
-    global _scopeStack, _allScopes, _location, hayError
-    _scopeStack = []
-    _allScopes  = []
-    _location   = 0
-    hayError    = False
+    global scopeStack, allScopes, location, error
+    scopeStack = []
+    allScopes  = []
+    location   = 0
+    error    = False
 
-    _enterScope()
-    _traverseSymbols(tree)
-    _exitScope('global')
+    enterScope()
+    traverseSymbols(tree)
+    exitScope('global')
 
     if imprime:
-        _printAllScopes()
+        printAllScopes()
 
-    return hayError
+    return error
 
-_funStack = []  
+funStack = []  
 
 
-def _checkNode(t):
-    """Post-orden: asigna t.type y reporta errores de tipo."""
+def checkNode(t):
     if t is None:
         return
 
@@ -233,14 +232,14 @@ def _checkNode(t):
 
         # [T-ID-INT / T-ID-ARR]
         elif t.exp == ExpKind.IdK:
-            sym = _lookupSymbol(t.name)
+            sym = lookupSymbol(t.name)
             if sym is None:
                 t.type = ExpType.Integer
             else:
                 t.type = sym['type']
                 if sym['isArray'] and t.child[0] is not None:
                     if t.child[0].type != ExpType.Integer:
-                        _semanticError(t.child[0].lineno, '',
+                        semanticError(t.child[0].lineno, '',
                                        "el índice del arreglo debe ser de tipo int")
                     t.type = ExpType.Integer
 
@@ -259,18 +258,18 @@ def _checkNode(t):
 
             if t.op in _ARITH:
                 if lType != ExpType.Integer:
-                    _semanticError((left.lineno if left else t.lineno), '',
+                    semanticError((left.lineno if left else t.lineno), '',
                                    "operando izquierdo no es de tipo int")
                 if rType != ExpType.Integer:
-                    _semanticError((right.lineno if right else t.lineno), '',
+                    semanticError((right.lineno if right else t.lineno), '',
                                    "operando derecho no es de tipo int")
                 t.type = ExpType.Integer
             elif t.op in _RELOPS:
                 if lType != ExpType.Integer:
-                    _semanticError((left.lineno if left else t.lineno), '',
+                    semanticError((left.lineno if left else t.lineno), '',
                                    "operando izquierdo de relación no es de tipo int")
                 if rType != ExpType.Integer:
-                    _semanticError((right.lineno if right else t.lineno), '',
+                    semanticError((right.lineno if right else t.lineno), '',
                                    "operando derecho de relación no es de tipo int")
                 t.type = ExpType.Boolean
             else:
@@ -281,18 +280,18 @@ def _checkNode(t):
             exprType = t.child[0].type if t.child[0] else ExpType.Void
             if t.child[1] is not None:   # índice de arreglo
                 if t.child[1].type != ExpType.Integer:
-                    _semanticError(t.child[1].lineno, t.name,
+                    semanticError(t.child[1].lineno, t.name,
                                    "índice de arreglo en asignación no es int")
             if exprType != ExpType.Integer:
                 errLine = t.child[0].lineno if t.child[0] else t.lineno
-                _semanticError(errLine, t.name,
+                semanticError(errLine, t.name,
                                f"asignación de valor no-int a '{t.name}'")
-            sym = _lookupSymbol(t.name)
+            sym = lookupSymbol(t.name)
             t.type = sym['type'] if sym else ExpType.Integer
 
         # [T-CALL-I / T-CALL-V / T-ARGS]
         elif t.exp == ExpKind.CallK:
-            sym = _lookupSymbol(t.name)
+            sym = lookupSymbol(t.name)
             if sym is None:
                 t.type = ExpType.Integer   # recuperación
             else:
@@ -304,16 +303,31 @@ def _checkNode(t):
                     actualArgs.append(a)
                     a = a.sibling
                 if len(actualArgs) != len(formalParams):
-                    _semanticError(t.lineno, t.name,
+                    semanticError(t.lineno, t.name,
                                    f"'{t.name}' esperaba {len(formalParams)} "
                                    f"argumento(s), se pasaron {len(actualArgs)}")
                 else:
                     for i, (arg, fp) in enumerate(zip(actualArgs, formalParams)):
-                        if arg.type != fp['type']:
-                            _semanticError(arg.lineno, t.name,
+                        # Verificar tipo base del argumento
+                        if arg.type != fp['type'] and not (
+                                fp['isArray'] and arg.type == ExpType.Integer):
+                            semanticError(arg.lineno, t.name,
                                            f"argumento {i+1} de '{t.name}': "
                                            f"se esperaba {fp['type'].name}, "
                                            f"se recibió {arg.type.name}")
+                        if fp['isArray']:
+                            arg_sym = lookupSymbol(arg.name) if hasattr(arg, 'name') and arg.name else None
+                            arg_is_array_var = (
+                                arg.exp == ExpKind.IdK          # es un identificador simple
+                                and arg.child[0] is None        # sin subíndice (no a[i])
+                                and arg_sym is not None
+                                and arg_sym['isArray']           # declarado como arreglo
+                            ) if hasattr(arg, 'exp') else False
+                            if not arg_is_array_var:
+                                semanticError(arg.lineno, t.name,
+                                               f"argumento {i+1} de '{t.name}': "
+                                               f"se esperaba una variable de arreglo "
+                                               f"(sin subíndice)")
 
     # Sentencias
     elif t.nodekind == NodeKind.StmtK:
@@ -321,116 +335,113 @@ def _checkNode(t):
         # [T-IF]
         if t.stmt == StmtKind.IfK:
             cond = t.child[0]
-            if cond and cond.type != ExpType.Boolean:
-                _semanticError(cond.lineno, '',
-                               "la condición del if debe ser booleana "
-                               "(usa <, <=, >, >=, ==, !=)")
+            if cond and cond.type not in (ExpType.Integer, ExpType.Boolean):
+                semanticError(cond.lineno, '',
+                               "la condición del if debe ser de tipo int o booleana")
 
         # [T-WHILE]
         elif t.stmt == StmtKind.WhileK:
             cond = t.child[0]
-            if cond and cond.type != ExpType.Boolean:
-                _semanticError(cond.lineno, '',
-                               "la condición del while debe ser booleana "
-                               "(usa <, <=, >, >=, ==, !=)")
+            if cond and cond.type not in (ExpType.Integer, ExpType.Boolean):
+                semanticError(cond.lineno, '',
+                               "la condición del while debe ser de tipo int o booleana")
 
         # [T-RET-I / T-RET-V]
         elif t.stmt == StmtKind.ReturnK:
-            if _funStack:
-                funName, funRetType = _funStack[-1]
+            if funStack:
+                funName, funRetType = funStack[-1]
                 expr = t.child[0]
                 if funRetType == ExpType.Void:
                     if expr is not None and expr.type != ExpType.Void:
-                        _semanticError(t.lineno, 'return',
+                        semanticError(t.lineno, 'return',
                                        f"función void '{funName}' no debe retornar un valor")
                 else:   # int
                     if expr is None:
-                        _semanticError(t.lineno, 'return',
+                        semanticError(t.lineno, 'return',
                                        f"función int '{funName}' debe retornar un valor int")
                     elif expr.type != ExpType.Integer:
-                        _semanticError(expr.lineno, 'return',
+                        semanticError(expr.lineno, 'return',
                                        f"función int '{funName}' debe retornar int, "
                                        f"se encontró {expr.type.name}")
 
     # Declaraciones
     elif t.nodekind == NodeKind.DeclK:
         if t.decl == DeclKind.VarK and t.typeSpec == TokenType.VOID:
-            _semanticError(t.lineno, t.name,
+            semanticError(t.lineno, t.name,
                            f"variable '{t.name}' no puede ser de tipo void")
 
 
-def _traverseTypes(t):
+def traverseTypes(t):
     if t is None:
         return
 
-    # Manejo especial de declaraciones de función
     if t.nodekind == NodeKind.DeclK and t.decl == DeclKind.FunK:
         retType = ExpType.Integer if t.typeSpec == TokenType.INT else ExpType.Void
-        _funStack.append((t.name, retType))
-        _enterScope()
+        funStack.append((t.name, retType))
+        enterScope()
         p = t.child[0]
         while p is not None:
             pType = ExpType.Integer if p.typeSpec == TokenType.INT else ExpType.Void
             if not (pType == ExpType.Void and p.name is None):
-                _insertSymbol(p.name, 'param', pType, p.isArray, 0, None,
+                insertSymbol(p.name, 'param', pType, p.isArray, 0, None,
                               p.lineno, silent=True)
             p = p.sibling
-        _traverseBodyTypes(t.child[1])
-        _exitScope(t.name)
-        _funStack.pop()
-        _traverseTypes(t.sibling)
+        traverseBodyTypes(t.child[1])
+        exitScope(t.name)
+        funStack.pop()
+        traverseTypes(t.sibling)
         return
 
     # Bloque compuesto: abrir scope
     if t.nodekind == NodeKind.StmtK and t.stmt == StmtKind.CompoundK:
-        _enterScope()
-        _insertLocalDecls(t.child[0])
+        enterScope()
+        insertLocalDecls(t.child[0])
         for i in range(MAXCHILDREN):
-            _traverseTypes(t.child[i])
-        _checkNode(t)
-        _exitScope(save=False)
-        _traverseTypes(t.sibling)
+            traverseTypes(t.child[i])
+        checkNode(t)
+        exitScope(save=False)
+        traverseTypes(t.sibling)
         return
 
     # Declaración de variable
     if t.nodekind == NodeKind.DeclK and t.decl == DeclKind.VarK:
         expType = ExpType.Integer if t.typeSpec == TokenType.INT else ExpType.Void
-        _insertSymbol(t.name, 'var', expType,
+        insertSymbol(t.name, 'var', expType,
                       t.isArray, t.arraySize if t.isArray else 0,
                       None, t.lineno, silent=True)
 
     for i in range(MAXCHILDREN):
-        _traverseTypes(t.child[i])
-    _checkNode(t)
-    _traverseTypes(t.sibling)
+        traverseTypes(t.child[i])
+    checkNode(t)
+    traverseTypes(t.sibling)
 
 
-def _traverseBodyTypes(t):
+def traverseBodyTypes(t):
     if t is None:
         return
     if t.nodekind == NodeKind.StmtK and t.stmt == StmtKind.CompoundK:
-        _insertLocalDecls(t.child[0])
+        insertLocalDecls(t.child[0])
         for i in range(MAXCHILDREN):
-            _traverseTypes(t.child[i])
-        _traverseTypes(t.sibling)
+            traverseTypes(t.child[i])
+        traverseTypes(t.sibling)
         return
-    _traverseTypes(t)
+    traverseTypes(t)
 
 
-def _insertLocalDecls(t):
+def insertLocalDecls(t):
     while t is not None:
         if t.nodekind == NodeKind.DeclK and t.decl == DeclKind.VarK:
             expType = ExpType.Integer if t.typeSpec == TokenType.INT else ExpType.Void
-            _insertSymbol(t.name, 'var', expType,
+            insertSymbol(t.name, 'var', expType,
                           t.isArray, t.arraySize if t.isArray else 0,
                           None, t.lineno, silent=True)
         t = t.sibling
 
-def _insertGlobalDecls(t):
+def insertGlobalDecls(t):
     while t is not None:
         if t.nodekind == NodeKind.DeclK and t.decl == DeclKind.VarK:
             expType = ExpType.Integer if t.typeSpec == TokenType.INT else ExpType.Void
-            _insertSymbol(t.name, 'var', expType,
+            insertSymbol(t.name, 'var', expType,
                           t.isArray, t.arraySize if t.isArray else 0,
                           None, t.lineno, silent=True)
         elif t.nodekind == NodeKind.DeclK and t.decl == DeclKind.FunK:
@@ -441,38 +452,49 @@ def _insertGlobalDecls(t):
                 pType = ExpType.Integer if p.typeSpec == TokenType.INT else ExpType.Void
                 paramList.append({'name': p.name, 'type': pType, 'isArray': p.isArray})
                 p = p.sibling
-            _insertSymbol(t.name, 'fun', retType, False, 0, paramList,
+            insertSymbol(t.name, 'fun', retType, False, 0, paramList,
                           t.lineno, silent=True)
         t = t.sibling
 
 
-#  FUNCION PRINCIPAL
+def checkMainDeclaration(tree):
+    last = None
+    t = tree
+    while t is not None:
+        last = t
+        t = t.sibling
+
+    if last is None:
+        semanticError(0, 'main', "el programa está vacío; se esperaba función 'main'")
+        return
+
+    if not (last.nodekind == NodeKind.DeclK
+            and last.decl == DeclKind.FunK
+            and last.name == 'main'):
+        semanticError(last.lineno, last.name,
+                       "la última declaración del programa debe ser la función 'main'")
 
 def semantica(tree, imprime=True):
-    """
-    Análisis semántico completo de C-.
-    1. Construye la(s) tabla(s) de símbolos (fase 1).
-    2. Verifica tipos sobre el AST (fase 2).
-    Devuelve True si hubo errores, False si todo está bien.
-    """
-    global _scopeStack, _allScopes, _location, _funStack, hayError
+    global scopeStack, allScopes, location, funStack, error
 
     tabla(tree, imprime)
 
-    _scopeStack = []
-    _allScopes  = []
-    _location   = 0
-    _funStack   = []
+    scopeStack = []
+    allScopes  = []
+    location   = 0
+    funStack   = []
 
-    _enterScope()
-    _insertGlobalDecls(tree)
-    _traverseTypes(tree)
-    _exitScope('global')
+    checkMainDeclaration(tree)
+
+    enterScope()
+    insertGlobalDecls(tree)
+    traverseTypes(tree)
+    exitScope('global')
 
     if imprime:
-        if hayError:
+        if error:
             print("\nAnálisis semántico completado con errores.")
         else:
             print("\nAnálisis semántico completado sin errores.")
 
-    return hayError
+    return error
