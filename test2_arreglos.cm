@@ -1,0 +1,26 @@
+/* Test 2: arreglos y acceso por indice */
+int buscar(int arr[], int n, int val) {
+    int i;
+    int found;
+    i = 0;
+    found = 0;
+    while (i < n) {
+        if (arr[i] == val) {
+            found = 1;
+        }
+        i = i + 1;
+    }
+    return found;
+}
+
+void main(void) {
+    int datos[5];
+    int r;
+    datos[0] = 10;
+    datos[1] = 20;
+    datos[2] = 30;
+    datos[3] = 40;
+    datos[4] = 50;
+    r = buscar(datos, 5, 30);
+    return;
+}

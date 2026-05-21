@@ -1,0 +1,31 @@
+/* Test 4: errores de tipo que el semantico debe detectar */
+
+/* funcion void que se usa como valor entero */
+void imprime(int x) {
+    return;
+}
+
+/* funcion int correcta */
+int doble(int x) {
+    return x * 2;
+}
+
+void main(void) {
+    int x;
+    int y;
+    x = 5;
+
+    /* ERROR 1: condicion de if no es booleana (es entera) */
+    if (x + 1) {
+        y = 10;
+    }
+
+    /* ERROR 2: asignar resultado void a variable int */
+    y = imprime(x);
+
+    /* ERROR 3: llamada con numero incorrecto de argumentos */
+    y = doble(x, x);
+
+    /* ERROR 4: funcion void retorna un valor */
+    return;
+}

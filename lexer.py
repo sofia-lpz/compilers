@@ -1,3 +1,6 @@
+# Sofia Moreno Lopez
+# A01028251
+
 from globalTypes import *
 
 #tabla de transiciones 
@@ -56,7 +59,7 @@ posicion = 0
 progLong = 0
 lineno   = 1
 
-def globales(prog, pos, long):
+def globalesLexer(prog, pos, long):
     global programa, posicion, progLong, lineno
     programa = prog
     posicion = pos
@@ -158,13 +161,13 @@ def getToken(imprime=True):
                 if imprime:
                     print(f"token of type ERROR = {lex_err}")
                 posicion += 1
-                return TokenType.ERROR, lex_err
+                return TokenType.ERROR, lex_err, lineno
 
             if imprime:
                 print(f"token of type {tokenType.name} = {lexema}")
             lex_ret   = lexema
             posicion += 1
-            return tokenType, lex_ret
+            return tokenType, lex_ret, lineno
 
         if estado == 0:
             pos_inicio = posicion + 1
@@ -173,4 +176,4 @@ def getToken(imprime=True):
 
     if imprime:
         print(f"token of type ENDFILE = ")
-    return TokenType.ENDFILE, ''
+    return TokenType.ENDFILE, '', lineno

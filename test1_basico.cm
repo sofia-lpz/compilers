@@ -1,0 +1,19 @@
+/* Test 1: programa basico con variables y operaciones aritmeticas */
+int suma(int a, int b) {
+    return a + b;
+}
+
+int resta(int a, int b) {
+    return a - b;
+}
+
+void main(void) {
+    int x;
+    int y;
+    int resultado;
+    x = 10;
+    y = 3;
+    resultado = suma(x, y);
+    resultado = resta(resultado, y);
+    return;
+}

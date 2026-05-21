@@ -1,0 +1,21 @@
+/* Test 5: errores de declaracion que el semantico debe detectar */
+
+int x;
+int x;
+
+void foo(int a, int b) {
+    int a;
+    int resultado;
+    resultado = a + b + c;
+    return;
+}
+
+void bar(void) {
+    return noExiste(1);
+}
+
+void main(void) {
+    int z;
+    z = foo(1, 2);
+    return;
+}

@@ -3,6 +3,8 @@ int suma(int a, int b) {
     return a + b;
 }
 
+x = x ! y;
+
 void main(void) {
     int x;
     int y;
@@ -28,5 +30,5 @@ void main(void) {
     }
 
     /* prueba de error: ! sin = */
-    x = x ! y;
+
 }
